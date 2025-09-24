@@ -16,6 +16,5 @@ env/
 *.log
 
 # Results or output folders
-results/
 models/
 datasets/

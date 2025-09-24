@@ -1,49 +1,20 @@
-# import joblib
-# from sklearn.metrics import classification_report, confusion_matrix
-# import seaborn as sns
-# import matplotlib.pyplot as plt
-# import pandas as pd
-# import os
-# def evaluate_model(model_name, X_test, y_test):
-#     if not os.path.exists("../results"):
-#         os.makedirs("../results")
+import os
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.metrics import classification_report, confusion_matrix
+import joblib
 
-#     # Load models
-#     model = joblib.load(f"../models/{model_name}.pkl")
-#     vectorizer = joblib.load("../models/tfidf.pkl")
+def evaluate_and_save_results(X_test, Y_test, distilbert_logits, le):
+    """
+    Evaluate classical models and DistilBERT predictions and save results.
 
-#     # Transform test data
-#     X_test_vec = vectorizer.transform(X_test)
-#     y_pred = model.predict(X_test_vec)
-
-#     # Metrics
-#     print(classification_report(y_test, y_pred))
-
-#     # Confusion matrix
-#     cm = confusion_matrix(y_test, y_pred)
-#     sns.heatmap(cm, annot=True, fmt='d')
-#     plt.savefig(f"../results/confusion_matrix_{model_name}.png")
-#     plt.close()
-
-#     # Save sample predictions
-#     sample_df = pd.DataFrame({
-#         "text": X_test,
-#         "actual": y_test,
-#         "predicted": y_pred
-#     })
-#     sample_df.to_csv(f"../results/sample_predictions_{model_name}.csv", index=False)
-
-
-
-
-
-
-
-
-
-
-
-def evaluate_and_save_results(X_test, Y_test, bert_preds, le):
+    Args:
+        X_test (list): Test texts
+        Y_test (list or array): True labels (numeric)
+        distilbert_logits (torch.Tensor or np.array): Model output logits
+        le (LabelEncoder): Fitted label encoder
+    """
     if not os.path.exists("../results"):
         os.makedirs("../results")
 
@@ -52,21 +23,33 @@ def evaluate_and_save_results(X_test, Y_test, bert_preds, le):
     NB_model = joblib.load("../models/naive_bayes.pkl")
     vectorizer = joblib.load("../models/tfidf.pkl")
 
-    # Transform test data
+    # Transform test data for classical models
     X_test_vec = vectorizer.transform(X_test)
 
-    # Predict
+    # Predict using classical models
     logistic_pred = logistic_model.predict(X_test_vec)
     NB_pred = NB_model.predict(X_test_vec)
+
+    # Predict using DistilBERT
+    if isinstance(distilbert_logits, torch.Tensor):
+        distilbert_pred = torch.argmax(distilbert_logits, dim=1).cpu().numpy()
+    else:
+        # Convert to numpy array if it isn’t already
+        distilbert_pred = np.array(distilbert_logits)
+        # If it’s 2D (logits), take argmax along axis=1
+        if distilbert_pred.ndim > 1:
+            distilbert_pred = distilbert_pred.argmax(axis=1)
+        # If it’s already 1D (predictions), keep as is
 
     # Convert numeric predictions back to original labels
     logistic_pred_labels = le.inverse_transform(logistic_pred)
     NB_pred_labels = le.inverse_transform(NB_pred)
-    bert_pred_labels = le.inverse_transform(bert_preds)
+    distilbert_pred_labels = le.inverse_transform(distilbert_pred)
     Y_test_labels = le.inverse_transform(Y_test)
 
-    for name, pred in zip(["logistic_class","naive_bayes","bert"], 
-                          [logistic_pred_labels, NB_pred_labels, bert_pred_labels]):
+    # Evaluate and save results
+    for name, pred in zip(["logistic_class","naive_bayes","distilbert"],
+                          [logistic_pred_labels, NB_pred_labels, distilbert_pred_labels]):
         print(f"\nClassification Report for {name}:")
         print(classification_report(Y_test_labels, pred))
         cm = confusion_matrix(Y_test_labels, pred)
@@ -81,6 +64,3 @@ def evaluate_and_save_results(X_test, Y_test, bert_preds, le):
             "predicted": pred
         })
         sample_df.to_csv(f"../results/sample_predictions_{name}.csv", index=False)
-
-
-
